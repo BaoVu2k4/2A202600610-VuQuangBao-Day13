@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from structlog.contextvars import bind_contextvars
 
 from .agent import LabAgent
+from .audit import audit_log
 from .incidents import disable, enable, status
 from .logging_config import configure_logging, get_logger
 from .metrics import record_error, snapshot
@@ -67,8 +68,9 @@ async def dashboard() -> FileResponse:
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     # Enrich every log in this request with stable request context.
+    actor = hash_user_id(body.user_id)
     bind_contextvars(
-        user_id_hash=hash_user_id(body.user_id),
+        user_id_hash=actor,
         session_id=body.session_id,
         feature=body.feature,
         model=agent.model,
@@ -96,6 +98,16 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             cost_usd=result.cost_usd,
             payload={"answer_preview": summarize_text(result.answer)},
         )
+        # Audit trail: record the access without storing message/answer content.
+        audit_log(
+            action="chat.request",
+            resource=body.feature,
+            outcome="success",
+            actor=actor,
+            correlation_id=request.state.correlation_id,
+            session_id=body.session_id,
+            model=agent.model,
+        )
         return ChatResponse(
             answer=result.answer,
             correlation_id=request.state.correlation_id,
@@ -114,24 +126,62 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             error_type=error_type,
             payload={"detail": str(exc), "message_preview": summarize_text(body.message)},
         )
+        audit_log(
+            action="chat.request",
+            resource=body.feature,
+            outcome="failure",
+            actor=actor,
+            correlation_id=request.state.correlation_id,
+            session_id=body.session_id,
+            model=agent.model,
+            error_type=error_type,
+        )
         raise HTTPException(status_code=500, detail=error_type) from exc
 
 
 @app.post("/incidents/{name}/enable")
-async def enable_incident(name: str) -> JSONResponse:
+async def enable_incident(name: str, request: Request) -> JSONResponse:
     try:
         enable(name)
         log.warning("incident_enabled", service="control", payload={"name": name})
+        audit_log(
+            action="incident.enable",
+            resource=name,
+            outcome="success",
+            actor="operator",
+            correlation_id=request.state.correlation_id,
+        )
         return JSONResponse({"ok": True, "incidents": status()})
     except KeyError as exc:
+        audit_log(
+            action="incident.enable",
+            resource=name,
+            outcome="denied",
+            actor="operator",
+            correlation_id=request.state.correlation_id,
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/incidents/{name}/disable")
-async def disable_incident(name: str) -> JSONResponse:
+async def disable_incident(name: str, request: Request) -> JSONResponse:
     try:
         disable(name)
         log.warning("incident_disabled", service="control", payload={"name": name})
+        audit_log(
+            action="incident.disable",
+            resource=name,
+            outcome="success",
+            actor="operator",
+            correlation_id=request.state.correlation_id,
+        )
         return JSONResponse({"ok": True, "incidents": status()})
     except KeyError as exc:
+        audit_log(
+            action="incident.disable",
+            resource=name,
+            outcome="denied",
+            actor="operator",
+            correlation_id=request.state.correlation_id,
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc

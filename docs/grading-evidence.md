@@ -12,3 +12,4 @@
 - Incident before/after fix
 - Cost comparison before/after optimization
 - Auto-instrumentation proof
+- Separate audit log (`data/audit.jsonl`) showing access + control-plane events

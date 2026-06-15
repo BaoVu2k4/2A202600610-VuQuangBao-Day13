@@ -21,7 +21,7 @@
 - [TOTAL_TRACES_COUNT]: 20 (≥10 yêu cầu)
 - [PII_LEAKS_FOUND]: 0
 
-> Kết quả `python scripts/validate_logs.py`: PASSED cả 4 hạng mục (Basic JSON schema, Correlation ID propagation, Log enrichment, PII scrubbing). 0 PII leak, 11+ correlation ID duy nhất.
+> Kết quả `python scripts/validate_logs.py`: PASSED cả 4 hạng mục (Basic JSON schema, Correlation ID propagation, Log enrichment, PII scrubbing). 20 log records, 0 PII leak, 10 correlation ID duy nhất.
 
 ---
 
@@ -93,6 +93,7 @@
   - **Tracing & Enrichment**: sửa `tracing.py` tương thích **Langfuse v3** (`from langfuse import observe, get_client`, shim `langfuse_context`), thêm `load_dotenv()` để nạp key; tạo 20 traces có metadata đầy đủ.
   - **SLO & Alerts**: rà soát `config/slo.yaml`, `config/alert_rules.yaml`, `docs/alerts.md` (3 alert + runbook).
   - **Load Test & Dashboard**: chạy `load_test.py --concurrency 5`; tự xây dashboard 6 panel (`app/dashboard.html` + route `/dashboard`).
+  - **Audit log (bonus)**: viết `app/audit.py` ghi luồng audit tách riêng `data/audit.jsonl`, wire vào `/chat` và `/incidents/*` trong `app/main.py`.
   - **Incident & Report**: inject cả 3 incident, phân tích root cause Metrics→Traces→Logs; viết báo cáo này.
 - [EVIDENCE_LINK]: https://github.com/BaoVu2k4/2A202600610-VuQuangBao-Day13/commits/main
 - [VALIDATE_SCORE]: 100/100
@@ -101,6 +102,6 @@
 ---
 
 ## 6. Bonus Items (Optional)
-- [BONUS_COST_OPTIMIZATION]: Đã định lượng cost_spike (before/after: tokens_out 248→530/req, avg_cost $0.002→$0.004). Đề xuất tối ưu: giới hạn `max_tokens` + route model rẻ → có thể đo lại sau khi áp dụng.
-- [BONUS_AUDIT_LOGS]: Cấu hình sẵn `AUDIT_LOG_PATH=data/audit.jsonl` trong `.env` (có thể tách audit log riêng nếu cần).
-- [BONUS_CUSTOM_METRIC]: Dashboard tự động (auto-instrumentation client-side: tự poll `/metrics`, tính QPS từ delta traffic, vẽ đường SLO động) — `app/dashboard.html`.
+- [BONUS_AUDIT_LOGS]: **Đã triển khai thật** — module `app/audit.py` ghi một luồng audit **tách riêng** ra `data/audit.jsonl` (độc lập với `data/logs.jsonl`). Mỗi bản ghi có `ts`, `action`, `resource`, `outcome` (`success`/`failure`/`denied`), `actor` (user_id đã hash, **không chứa nội dung tin nhắn/PII**), `correlation_id` (để join với log/trace). Các sự kiện được audit: `chat.request` (truy cập dữ liệu) và `incident.enable`/`incident.disable` (thao tác control-plane). Sinh bằng chứng: chạy app + vài request rồi xem `data/audit.jsonl`.
+- [BONUS_CUSTOM_METRIC / AUTOMATION]: Dashboard tự động (auto-instrumentation client-side: tự poll `/metrics`, tính QPS từ delta traffic, vẽ đường SLO động) — `app/dashboard.html`; kèm script tự động `scripts/load_test.py` và `scripts/inject_incident.py`.
+- [BONUS_COST_OPTIMIZATION]: Đã **định lượng** chi phí khi incident `cost_spike` (before/after: tokens_out ~248→~530/req, avg_cost $0.002→$0.004 ≈ 2×). *Lưu ý trung thực:* đây là số đo của sự cố, **chưa** phải số đo sau khi áp dụng tối ưu. Đề xuất tối ưu (giới hạn `max_tokens` + route câu hỏi dễ sang model rẻ) sẽ được đo lại trước/sau nếu triển khai tiếp.
