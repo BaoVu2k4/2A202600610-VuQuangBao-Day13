@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Day 13 Observability Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: #0f1419; color: #e6e6e6; }
+    header { padding: 16px 24px; border-bottom: 1px solid #232b36; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    header h1 { font-size: 18px; margin: 0; }
+    .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #1c2530; border: 1px solid #2c3a4a; }
+    .pill.ok { color: #4ade80; } .pill.warn { color: #fbbf24; } .pill.err { color: #f87171; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 16px 24px; }
+    .panel { background: #141b24; border: 1px solid #232b36; border-radius: 10px; padding: 12px 14px; min-height: 230px; display: flex; flex-direction: column; }
+    .panel h2 { font-size: 13px; margin: 0 0 4px; color: #9fb0c3; font-weight: 600; }
+    .panel .unit { font-size: 11px; color: #6b7d92; margin-bottom: 8px; }
+    .panel canvas { flex: 1; }
+    .big { font-size: 30px; font-weight: 700; }
+    .sub { font-size: 12px; color: #8aa; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+    td { padding: 3px 4px; border-bottom: 1px solid #232b36; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📊 Day 13 — Observability Dashboard</h1>
+    <span class="pill" id="status">connecting…</span>
+    <span class="pill">auto-refresh: <b id="refresh">15s</b></span>
+    <span class="pill">window: live session</span>
+    <span class="pill" id="updated">—</span>
+  </header>
+
+  <div class="grid">
+    <!-- 1. Latency -->
+    <div class="panel">
+      <h2>1 · Latency P50 / P95 / P99</h2>
+      <div class="unit">unit: milliseconds (ms) · SLO line: P95 &lt; 3000ms</div>
+      <canvas id="latency"></canvas>
+    </div>
+    <!-- 2. Traffic -->
+    <div class="panel">
+      <h2>2 · Traffic (requests)</h2>
+      <div class="unit">unit: total requests + QPS (req/s)</div>
+      <canvas id="traffic"></canvas>
+    </div>
+    <!-- 3. Error rate -->
+    <div class="panel">
+      <h2>3 · Error rate + breakdown</h2>
+      <div class="unit">unit: percent (%) · SLO line: &lt; 2%</div>
+      <canvas id="errors"></canvas>
+      <table id="errTable"></table>
+    </div>
+    <!-- 4. Cost -->
+    <div class="panel">
+      <h2>4 · Cost over time</h2>
+      <div class="unit">unit: USD · SLO line: total &lt; $2.50/day</div>
+      <canvas id="cost"></canvas>
+    </div>
+    <!-- 5. Tokens -->
+    <div class="panel">
+      <h2>5 · Tokens in / out</h2>
+      <div class="unit">unit: tokens (cumulative)</div>
+      <canvas id="tokens"></canvas>
+    </div>
+    <!-- 6. Quality -->
+    <div class="panel">
+      <h2>6 · Quality proxy (heuristic)</h2>
+      <div class="unit">unit: score 0–1 · SLO line: avg ≥ 0.75</div>
+      <canvas id="quality"></canvas>
+    </div>
+  </div>
+
+<script>
+const REFRESH_MS = 15000;
+const labels = [];
+const ds = { p50:[], p95:[], p99:[], traffic:[], qps:[], errRate:[], cost:[], avgCost:[], tin:[], tout:[], quality:[] };
+let lastTraffic = 0, lastTime = null;
+
+const baseOpts = (slo) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+  plugins: { legend: { labels: { color:'#9fb0c3', boxWidth:12, font:{size:10} } } },
+  scales: {
+    x: { ticks:{ color:'#6b7d92', maxTicksLimit:6, font:{size:9} }, grid:{ color:'#1c2530' } },
+    y: { ticks:{ color:'#6b7d92', font:{size:9} }, grid:{ color:'#1c2530' },
+         ...(slo!==undefined ? {} : {}) }
+  }
+});
+function sloLine(v){ return { label:'SLO', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1, _slo:v }; }
+
+const C = {};
+C.latency = new Chart(document.getElementById('latency'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'P50', data:ds.p50, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'P95', data:ds.p95, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'P99', data:ds.p99, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'SLO 3000ms', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
+  ]}, options: baseOpts() });
+C.traffic = new Chart(document.getElementById('traffic'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'Total requests', data:ds.traffic, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)', fill:true, tension:.3, pointRadius:0, yAxisID:'y' },
+    { label:'QPS', data:ds.qps, borderColor:'#a78bfa', backgroundColor:'transparent', tension:.3, pointRadius:0, yAxisID:'y1' },
+  ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
+      y:{ position:'left', ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} },
+      y1:{ position:'right', ticks:{color:'#a78bfa',font:{size:9}}, grid:{drawOnChartArea:false} } } } });
+C.errors = new Chart(document.getElementById('errors'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'Error rate %', data:ds.errRate, borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.12)', fill:true, tension:.3, pointRadius:0 },
+    { label:'SLO 2%', data:[], borderColor:'#fbbf24', borderDash:[6,4], pointRadius:0, borderWidth:1 },
+  ]}, options: baseOpts() });
+C.cost = new Chart(document.getElementById('cost'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'Total cost $', data:ds.cost, borderColor:'#34d399', backgroundColor:'rgba(52,211,153,.1)', fill:true, tension:.3, pointRadius:0 },
+    { label:'Avg cost/req $', data:ds.avgCost, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:0, yAxisID:'y1' },
+    { label:'SLO $2.50/day', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
+  ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
+      y:{ position:'left', ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} },
+      y1:{ position:'right', ticks:{color:'#fbbf24',font:{size:9}}, grid:{drawOnChartArea:false} } } } });
+C.tokens = new Chart(document.getElementById('tokens'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'Tokens in', data:ds.tin, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'Tokens out', data:ds.tout, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+  ]}, options: baseOpts() });
+C.quality = new Chart(document.getElementById('quality'), { type:'line',
+  data:{ labels, datasets:[
+    { label:'Quality avg', data:ds.quality, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.12)', fill:true, tension:.3, pointRadius:0 },
+    { label:'SLO 0.75', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
+  ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
+      y:{ min:0, max:1, ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} } } } });
+
+function pushConst(arr, v, n){ arr.length = 0; for(let i=0;i<n;i++) arr.push(v); }
+
+async function tick(){
+  try {
+    const r = await fetch('/metrics', { cache:'no-store' });
+    const m = await r.json();
+    const now = new Date();
+    const t = now.toLocaleTimeString();
+    labels.push(t); if (labels.length > 40) labels.shift();
+
+    // QPS from traffic delta
+    let qps = 0;
+    if (lastTime) { const dt=(now-lastTime)/1000; qps = dt>0 ? (m.traffic-lastTraffic)/dt : 0; }
+    lastTraffic = m.traffic; lastTime = now;
+
+    const totalErr = Object.values(m.error_breakdown||{}).reduce((a,b)=>a+b,0);
+    const errRate = m.traffic ? (totalErr/m.traffic*100) : 0;
+
+    const cap = arr => { if (arr.length>40) arr.shift(); };
+    ds.p50.push(m.latency_p50); ds.p95.push(m.latency_p95); ds.p99.push(m.latency_p99);
+    ds.traffic.push(m.traffic); ds.qps.push(+qps.toFixed(2));
+    ds.errRate.push(+errRate.toFixed(2));
+    ds.cost.push(m.total_cost_usd); ds.avgCost.push(m.avg_cost_usd);
+    ds.tin.push(m.tokens_in_total); ds.tout.push(m.tokens_out_total);
+    ds.quality.push(m.quality_avg);
+    [ds.p50,ds.p95,ds.p99,ds.traffic,ds.qps,ds.errRate,ds.cost,ds.avgCost,ds.tin,ds.tout,ds.quality].forEach(cap);
+
+    // SLO constant lines
+    pushConst(C.latency.data.datasets[3].data, 3000, labels.length);
+    pushConst(C.errors.data.datasets[1].data, 2, labels.length);
+    pushConst(C.cost.data.datasets[2].data, 2.5, labels.length);
+    pushConst(C.quality.data.datasets[1].data, 0.75, labels.length);
+
+    Object.values(C).forEach(c=>c.update());
+
+    // error breakdown table
+    const tb = document.getElementById('errTable');
+    const rows = Object.entries(m.error_breakdown||{});
+    tb.innerHTML = rows.length ? rows.map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right">${v}</td></tr>`).join('')
+                              : '<tr><td class="sub">no errors recorded</td></tr>';
+
+    // status pill
+    const st = document.getElementById('status');
+    const breach = m.latency_p95 > 3000 || errRate > 2 || m.total_cost_usd > 2.5;
+    st.textContent = breach ? '⚠ SLO breach' : '✓ healthy';
+    st.className = 'pill ' + (breach ? 'err' : 'ok');
+    document.getElementById('updated').textContent = 'updated ' + t;
+  } catch(e) {
+    const st = document.getElementById('status');
+    st.textContent = '✗ app offline'; st.className='pill err';
+  }
+}
+document.getElementById('refresh').textContent = (REFRESH_MS/1000)+'s';
+tick();
+setInterval(tick, REFRESH_MS);
+</script>
+</body>
+</html>
