@@ -40,7 +40,7 @@
 3. structlog chạy chuỗi processor: `merge_contextvars` → `add_log_level` → `TimeStamper(ts)` → **`scrub_event` (redact PII)** → ghi JSONL ra `data/logs.jsonl` → `JSONRenderer`.
 
 ### 3.2 Dashboard & SLOs
-- [DASHBOARD_6_PANELS_SCREENSHOT]: docs/evidence-dashboard.png
+- [DASHBOARD_6_PANELS_SCREENSHOT]: docs/evidence-dashboard.png (panel 1–3: Latency, Traffic, Error rate) + docs/evidence-dashboard-panels-4-6.png (panel 4–6: Cost, Tokens, Quality)
 - Dashboard tự xây bằng Chart.js, app phục vụ tại **http://127.0.0.1:8000/dashboard** (cùng origin với `/metrics`, không lỗi CORS). Auto-refresh 15s, có đường SLO (nét đứt đỏ), đơn vị rõ ràng. 6 panel: (1) Latency P50/P95/P99, (2) Traffic + QPS, (3) Error rate + breakdown, (4) Cost over time, (5) Tokens in/out, (6) Quality proxy.
 - [SLO_TABLE]:
 | SLI | Target | Window | Current Value (đo thật) |

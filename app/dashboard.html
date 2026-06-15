@@ -13,7 +13,7 @@
     .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #1c2530; border: 1px solid #2c3a4a; }
     .pill.ok { color: #4ade80; } .pill.warn { color: #fbbf24; } .pill.err { color: #f87171; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 16px 24px; }
-    .panel { background: #141b24; border: 1px solid #232b36; border-radius: 10px; padding: 12px 14px; min-height: 230px; display: flex; flex-direction: column; }
+    .panel { background: #141b24; border: 1px solid #232b36; border-radius: 10px; padding: 10px 14px; min-height: 188px; display: flex; flex-direction: column; }
     .panel h2 { font-size: 13px; margin: 0 0 4px; color: #9fb0c3; font-weight: 600; }
     .panel .unit { font-size: 11px; color: #6b7d92; margin-bottom: 8px; }
     .panel canvas { flex: 1; }
@@ -100,7 +100,7 @@ C.latency = new Chart(document.getElementById('latency'), { type:'line',
   ]}, options: baseOpts() });
 C.traffic = new Chart(document.getElementById('traffic'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Total requests', data:ds.traffic, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)', fill:true, tension:.3, pointRadius:2.5, yAxisID:'y' },
+    { label:'Total requests', data:ds.traffic, borderColor:'#4ade80', backgroundColor:'transparent', fill:false, tension:.3, pointRadius:2.5, yAxisID:'y' },
     { label:'QPS', data:ds.qps, borderColor:'#a78bfa', backgroundColor:'transparent', tension:.3, pointRadius:2.5, yAxisID:'y1' },
   ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
       y:{ position:'left', ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} },
