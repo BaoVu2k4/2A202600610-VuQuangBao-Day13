@@ -93,39 +93,39 @@ function sloLine(v){ return { label:'SLO', data:[], borderColor:'#f87171', borde
 const C = {};
 C.latency = new Chart(document.getElementById('latency'), { type:'line',
   data:{ labels, datasets:[
-    { label:'P50', data:ds.p50, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:0 },
-    { label:'P95', data:ds.p95, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:0 },
-    { label:'P99', data:ds.p99, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'P50', data:ds.p50, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:2.5 },
+    { label:'P95', data:ds.p95, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:2.5 },
+    { label:'P99', data:ds.p99, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:2.5 },
     { label:'SLO 3000ms', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
   ]}, options: baseOpts() });
 C.traffic = new Chart(document.getElementById('traffic'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Total requests', data:ds.traffic, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)', fill:true, tension:.3, pointRadius:0, yAxisID:'y' },
-    { label:'QPS', data:ds.qps, borderColor:'#a78bfa', backgroundColor:'transparent', tension:.3, pointRadius:0, yAxisID:'y1' },
+    { label:'Total requests', data:ds.traffic, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)', fill:true, tension:.3, pointRadius:2.5, yAxisID:'y' },
+    { label:'QPS', data:ds.qps, borderColor:'#a78bfa', backgroundColor:'transparent', tension:.3, pointRadius:2.5, yAxisID:'y1' },
   ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
       y:{ position:'left', ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} },
       y1:{ position:'right', ticks:{color:'#a78bfa',font:{size:9}}, grid:{drawOnChartArea:false} } } } });
 C.errors = new Chart(document.getElementById('errors'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Error rate %', data:ds.errRate, borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.12)', fill:true, tension:.3, pointRadius:0 },
+    { label:'Error rate %', data:ds.errRate, borderColor:'#f87171', backgroundColor:'rgba(248,113,113,.12)', fill:true, tension:.3, pointRadius:2.5 },
     { label:'SLO 2%', data:[], borderColor:'#fbbf24', borderDash:[6,4], pointRadius:0, borderWidth:1 },
   ]}, options: baseOpts() });
 C.cost = new Chart(document.getElementById('cost'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Total cost $', data:ds.cost, borderColor:'#34d399', backgroundColor:'rgba(52,211,153,.1)', fill:true, tension:.3, pointRadius:0 },
-    { label:'Avg cost/req $', data:ds.avgCost, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:0, yAxisID:'y1' },
+    { label:'Total cost $', data:ds.cost, borderColor:'#34d399', backgroundColor:'rgba(52,211,153,.1)', fill:true, tension:.3, pointRadius:2.5 },
+    { label:'Avg cost/req $', data:ds.avgCost, borderColor:'#fbbf24', backgroundColor:'transparent', tension:.3, pointRadius:2.5, yAxisID:'y1' },
     { label:'SLO $2.50/day', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
   ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
       y:{ position:'left', ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} },
       y1:{ position:'right', ticks:{color:'#fbbf24',font:{size:9}}, grid:{drawOnChartArea:false} } } } });
 C.tokens = new Chart(document.getElementById('tokens'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Tokens in', data:ds.tin, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:0 },
-    { label:'Tokens out', data:ds.tout, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:0 },
+    { label:'Tokens in', data:ds.tin, borderColor:'#60a5fa', backgroundColor:'transparent', tension:.3, pointRadius:2.5 },
+    { label:'Tokens out', data:ds.tout, borderColor:'#f472b6', backgroundColor:'transparent', tension:.3, pointRadius:2.5 },
   ]}, options: baseOpts() });
 C.quality = new Chart(document.getElementById('quality'), { type:'line',
   data:{ labels, datasets:[
-    { label:'Quality avg', data:ds.quality, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.12)', fill:true, tension:.3, pointRadius:0 },
+    { label:'Quality avg', data:ds.quality, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.12)', fill:true, tension:.3, pointRadius:2.5 },
     { label:'SLO 0.75', data:[], borderColor:'#f87171', borderDash:[6,4], pointRadius:0, borderWidth:1 },
   ]}, options:{ ...baseOpts(), scales:{ x:baseOpts().scales.x,
       y:{ min:0, max:1, ticks:{color:'#6b7d92',font:{size:9}}, grid:{color:'#1c2530'} } } } });
@@ -183,8 +183,16 @@ async function tick(){
   }
 }
 document.getElementById('refresh').textContent = (REFRESH_MS/1000)+'s';
-tick();
-setInterval(tick, REFRESH_MS);
+// Fast-seed the charts (poll every 2s for the first ~24s) so the dashboard
+// is never empty, then settle to the spec-compliant 15s refresh.
+let seeded = 0;
+async function seedThenRun(){
+  await tick();
+  seeded++;
+  if (seeded < 12) { setTimeout(seedThenRun, 2000); }
+  else { setInterval(tick, REFRESH_MS); }
+}
+seedThenRun();
 </script>
 </body>
 </html>

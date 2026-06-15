@@ -57,7 +57,11 @@ async def metrics() -> dict:
 
 @app.get("/dashboard")
 async def dashboard() -> FileResponse:
-    return FileResponse(Path(__file__).parent / "dashboard.html")
+    # no-store so the browser always fetches the latest dashboard build.
+    return FileResponse(
+        Path(__file__).parent / "dashboard.html",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)
