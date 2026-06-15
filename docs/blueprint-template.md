@@ -4,7 +4,7 @@
 
 ## 1. Team Metadata
 - [GROUP_NAME]: Vũ Quang Bảo (làm cá nhân toàn bộ)
-- [REPO_URL]: <điền link repo của bạn>
+- [REPO_URL]: https://github.com/BaoVu2k4/2A202600610-VuQuangBao-Day13
 - [MEMBERS]:
   - Member A: Vũ Quang Bảo | Role: Logging & PII
   - Member B: Vũ Quang Bảo | Role: Tracing & Enrichment
@@ -94,7 +94,7 @@
   - **SLO & Alerts**: rà soát `config/slo.yaml`, `config/alert_rules.yaml`, `docs/alerts.md` (3 alert + runbook).
   - **Load Test & Dashboard**: chạy `load_test.py --concurrency 5`; tự xây dashboard 6 panel (`app/dashboard.html` + route `/dashboard`).
   - **Incident & Report**: inject cả 3 incident, phân tích root cause Metrics→Traces→Logs; viết báo cáo này.
-- [EVIDENCE_LINK]: <link tới commit/PR của bạn — xem mục Git>
+- [EVIDENCE_LINK]: https://github.com/BaoVu2k4/2A202600610-VuQuangBao-Day13/commits/main
 - [VALIDATE_SCORE]: 100/100
 - [TESTS]: `pytest` → 2 passed
 
