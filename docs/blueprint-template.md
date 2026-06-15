@@ -40,8 +40,9 @@
 3. structlog chạy chuỗi processor: `merge_contextvars` → `add_log_level` → `TimeStamper(ts)` → **`scrub_event` (redact PII)** → ghi JSONL ra `data/logs.jsonl` → `JSONRenderer`.
 
 ### 3.2 Dashboard & SLOs
-- [DASHBOARD_6_PANELS_SCREENSHOT]: docs/evidence-dashboard.png (panel 1–3: Latency, Traffic, Error rate) + docs/evidence-dashboard-panels-4-6.png (panel 4–6: Cost, Tokens, Quality)
-- Dashboard tự xây bằng Chart.js, app phục vụ tại **http://127.0.0.1:8000/dashboard** (cùng origin với `/metrics`, không lỗi CORS). Auto-refresh 15s, có đường SLO (nét đứt đỏ), đơn vị rõ ràng. 6 panel: (1) Latency P50/P95/P99, (2) Traffic + QPS, (3) Error rate + breakdown, (4) Cost over time, (5) Tokens in/out, (6) Quality proxy.
+- [DASHBOARD_6_PANELS_SCREENSHOT]: docs/evidence-dashboard.png — **cả 6 panel trong 1 ảnh** (trạng thái healthy)
+- [DASHBOARD_INCIDENT_SCREENSHOT]: docs/evidence-dashboard-incident.png — cùng dashboard khi bật incident `rag_slow`: panel Latency vọt lên **P95 ≈ 2650ms**, badge latency đổi màu, đường tiến sát đường SLO 3000ms.
+- Dashboard tự xây bằng Chart.js, app phục vụ tại **http://127.0.0.1:8000/dashboard** (cùng origin với `/metrics`, không lỗi CORS). Layout 3×2 vừa khít 1 màn hình (chụp 1 ảnh đủ 6 panel), mỗi panel có **badge số liệu hiện tại** đọc rõ kể cả khi đường phẳng. Auto-refresh 15s, có đường SLO (nét đứt đỏ), đơn vị rõ ràng. 6 panel: (1) Latency P50/P95/P99, (2) Traffic + QPS, (3) Error rate + breakdown, (4) Cost over time, (5) Tokens in/out, (6) Quality proxy.
 - [SLO_TABLE]:
 | SLI | Target | Window | Current Value (đo thật) |
 |---|---:|---|---:|
@@ -68,7 +69,7 @@
 - [SYMPTOMS_OBSERVED]:
   - **tool_fail**: Panel Error rate trên dashboard nhảy lên 100%, badge chuyển `⚠ SLO breach`. `/metrics` hiện `error_breakdown: {"RuntimeError": 10}`. Traffic không tăng (request lỗi không được tính `record_request`).
   - **cost_spike**: Panel Cost & Tokens vọt lên. `tokens_out` ~530/req (so với ~248/req baseline) = **4×**; `avg_cost_usd` tăng `0.002 → 0.004`.
-  - **rag_slow**: Panel Latency vọt. `latency_ms` báo về **2651ms** (so với 150ms baseline ≈ **17×**), wall-time ~3011ms.
+  - **rag_slow**: Panel Latency vọt (xem `docs/evidence-dashboard-incident.png`). `latency_ms` báo về **2650ms** (so với 150ms baseline ≈ **17×**), wall-time ~3011ms.
 - [ROOT_CAUSE_PROVED_BY]:
   - **tool_fail** → Log line: `{"event":"request_failed","error_type":"RuntimeError","payload":{"detail":"Vector store timeout"},"correlation_id":"req-17c9f0c6",...}`. Root cause: `mock_rag.retrieve()` ném `RuntimeError("Vector store timeout")` khi cờ `tool_fail` bật → vector store không phản hồi.
   - **rag_slow** → Trace span `run` kéo dài ~2.6s; `reported_latency_ms=2651`. Root cause: `time.sleep(2.5)` trong bước retrieval (`mock_rag.py`) → RAG là thành phần chậm, không phải LLM.
